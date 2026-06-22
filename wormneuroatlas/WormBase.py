@@ -32,23 +32,29 @@ class WormBase:
                         gene = self.name_to_gene_wbid(gene_subset[i],alt=True)
                         
     def assert_db_version_consistency(self):
-        db_v_http = self.get_db_version_http()
+        try:
+            db_v_http = self.get_db_version_http()
+        except Exception as e:
+            w = "Could not retrieve the WormBase database version ("+str(e)+\
+                "). NOTE: WormBase released its final version (WS298) in "+\
+                "November 2025 and is no longer actively maintained "+\
+                "(see https://blog.wormbase.org/2025/07/23/"+\
+                "announcing-the-final-release-of-wormbase/). "+\
+                "The version endpoint has been removed, but gene field "+\
+                "queries (e.g. get_gene_expression) remain functional "+\
+                "for now via the bundled local data files."
+            warnings.warn(w)
+            self.version_consistency_check = False
+            return
         if db_v_http != self.db_version:
-            w = "Wormbase.org updated its database to a new version ("+\
-                db_v_http+"). The version of Worm Neuro Atlas that you are "+\
-                "using has been built for the wormbase database version "+\
-                self.db_version+". To ensure reproducible results, upgrade "+\
-                "Worm Neuro Atlas with "+\
-                "`python -m pip install --upgrade wormneuroatlas` "+\
-                "If this warning persists after upgrading, let the developers"+\
-                " know by opening an issue here: "+\
-                "https://github.com/francescorandi/wormneuroatlas/issues. "+\
-                "NOTE: You can still use Worm Neuro Atlas in the meantime. "+\
-                "The metadata accessible via  "+\
-                "wormneuroatlas.WormBase.get_metadata() and "+\
-                "wormneuroatlas.NeuroAtlas.get_metadata() contain the "+\
-                "version of wormbase that you are currently using, so make "+\
-                "sure you save the metadata alongside your results. "
+            w = "The WormBase REST API reports database version "+\
+                db_v_http+" but this package was built against "+\
+                self.db_version+". NOTE: WormBase released its final "+\
+                "version (WS298) in November 2025 and is no longer "+\
+                "actively maintained. Gene expression and connectome data "+\
+                "bundled with this package are unaffected; only live REST "+\
+                "API calls (e.g. WormBase.get_transcripts_ids()) may "+\
+                "return stale or unavailable data."
             warnings.warn(w)
             self.version_consistency_check = False
         else:
@@ -187,7 +193,7 @@ class WormBase:
         
     @classmethod
     def get_db_version_http(cls):
-        url = "http://rest.wormbase.org/rest/database/version"
+        url = "https://rest.wormbase.org/rest/database/version"
         r = cls.http_req(url)
 
         return r["data"]
@@ -207,7 +213,7 @@ class WormBase:
             Genes in the gene class.
         '''
         
-        url = "http://rest.wormbase.org/rest/field/gene_class/"+\
+        url = "https://rest.wormbase.org/rest/field/gene_class/"+\
                gene_class+"/current_genes"
         result = cls.http_req(url)
         genes = result["current_genes"]["data"]["Caenorhabditis elegans"]
@@ -235,7 +241,7 @@ class WormBase:
         if type(gene_wbid)==int:
             gene_wbid = cls.wbid_to_wbstr(gene_wbid)
         
-        url = "http://rest.wormbase.org/rest/widget/gene/"+\
+        url = "https://rest.wormbase.org/rest/widget/gene/"+\
                gene_wbid+"/sequences"
         result = cls.http_req(url)
         if result["fields"]["name"]["data"]["taxonomy"] != "c_elegans":
@@ -278,7 +284,7 @@ class WormBase:
     
     @classmethod
     def get_sequences_from_transcript_id(cls, transcript_wbid):
-        url = "http://rest.wormbase.org/rest/widget/transcript/"+\
+        url = "https://rest.wormbase.org/rest/widget/transcript/"+\
                transcript_wbid+"/sequences"
         r = cls.http_req(url)
         
@@ -299,7 +305,7 @@ class WormBase:
         
     @classmethod
     def get_gene_description(cls,gene_wbid):
-        url = "http://rest.wormbase.org/rest/field/gene/"+\
+        url = "https://rest.wormbase.org/rest/field/gene/"+\
                gene_wbid+"/concise_description"
            
         r = cls.http_req(url)
@@ -329,7 +335,12 @@ class WormBase:
         '''
         
         http = urllib3.PoolManager()
+        print(" --- Performing HTTP request to: "+url)
         r = http.request('GET', url)
+        print(r.status)
+        if r.status != 200:
+            raise ConnectionError(
+                f"HTTP request to {url} failed with status {r.status}")
         if parse:
             result = json.loads(r.data)
         else:
