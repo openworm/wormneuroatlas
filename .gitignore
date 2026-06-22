@@ -133,3 +133,4 @@ dmypy.json
 wormneuroatlas/drafts.py
 scripts/snippets_for_paper.py
 /scripts/tests/test_pep_pairs_pepgpcr_combos.txt
+/wormneuroatlas/.DS_Store
